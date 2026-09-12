@@ -1,0 +1,33 @@
+# IDE
+.idea/
+*.iml
+
+# Local reference repositories
+reference/
+
+# Secrets and local environment
+.env
+.env.*
+
+# Java / Maven
+target/
+**/target/
+*.class
+
+# Node / Vue
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Runtime data
+data/
+pgdata/
+meili_data/
+logs/
+*.log
+
+# Local OS files
+.DS_Store
+Thumbs.db
+
