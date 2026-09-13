@@ -1,0 +1,50 @@
+name: webcollector-local
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: webcollector-mysql
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-webcollector}
+      MYSQL_USER: ${MYSQL_USER:-webcollector}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-webcollector_dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-webcollector_root_dev}
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"
+    volumes:
+      - webcollector_mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: webcollector-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-webcollector_dev}
+    ports:
+      - "6380:6379"
+    volumes:
+      - webcollector_redis_data:/data
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-webcollector_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  webcollector_mysql_data:
+  webcollector_redis_data:
+

@@ -28,6 +28,10 @@
 - 前端：Vue 3、Vite、Pinia、Vue Router、Element Plus。
 - 部署：Docker Compose、Nginx。
 
+## Maven 结构
+
+根目录 `pom.xml` 是聚合工程，`backend/pom.xml` 是 Spring Boot 模块。IDEA 打开仓库根目录后，可以通过 Maven 工具窗口执行根工程构建。
+
 ## 目录
 
 ```text

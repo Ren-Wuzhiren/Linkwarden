@@ -1,5 +1,6 @@
 # IDE
 .idea/
+.idea.backup/
 *.iml
 
 # Local reference repositories
@@ -8,6 +9,7 @@ reference/
 # Secrets and local environment
 .env
 .env.*
+!.env.example
 
 # Java / Maven
 target/
@@ -30,4 +32,3 @@ logs/
 # Local OS files
 .DS_Store
 Thumbs.db
-
