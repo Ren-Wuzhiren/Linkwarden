@@ -32,3 +32,6 @@ logs/
 # Local OS files
 .DS_Store
 Thumbs.db
+
+# Local personal tool config (not committed per AGENTS.md)
+.claude/settings.local.json
