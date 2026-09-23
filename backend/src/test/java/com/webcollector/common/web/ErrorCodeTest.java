@@ -20,7 +20,8 @@ class ErrorCodeTest {
                 () -> assertEquals(HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND.getStatus()),
                 () -> assertEquals(HttpStatus.CONFLICT, ErrorCode.CONFLICT.getStatus()),
                 () -> assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR.getStatus()),
-                () -> assertEquals(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.SERVICE_UNAVAILABLE.getStatus())
+                () -> assertEquals(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.SERVICE_UNAVAILABLE.getStatus()),
+                () -> assertEquals(HttpStatus.UNAUTHORIZED, ErrorCode.AUTH_REQUIRED.getStatus())
         );
     }
 

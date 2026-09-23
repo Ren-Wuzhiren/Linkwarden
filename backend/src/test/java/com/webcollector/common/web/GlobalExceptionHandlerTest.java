@@ -1,5 +1,6 @@
 package com.webcollector.common.web;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -98,7 +99,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(post("/test/validation")
                         .header(RequestIdFilter.REQUEST_ID_HEADER, "req-handler-005")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":"))
+                        .content("\"name\""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("请求格式不正确"))
@@ -128,6 +129,21 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.details").isEmpty())
                 .andExpect(jsonPath("$.requestId").value("req-handler-007"))
                 .andExpect(content().string(not(containsString("secret internal details"))));
+    }
+
+    @Test
+    void shouldMapNotLoginExceptionToAuthRequired() throws Exception {
+        mockMvc.perform(get("/test/not-login")
+                .header(RequestIdFilter.REQUEST_ID_HEADER, "req-handler-008"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(
+                        RequestIdFilter.REQUEST_ID_HEADER,
+                        "req-handler-008"
+                ))
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
+                .andExpect(jsonPath("$.message").value("请先登录"))
+                .andExpect(jsonPath("$.details").isEmpty())
+                .andExpect(jsonPath("$.requestId").value("req-handler-008"));
     }
 
     @RestController
@@ -163,6 +179,15 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/unknown")
         void throwUnknownException() {
             throw new IllegalStateException("secret internal details");
+        }
+
+        @GetMapping("/test/not-login")
+        void throwNotLogin() {
+            throw new NotLoginException(
+                    NotLoginException.NOT_TOKEN_MESSAGE,
+                    "login",
+                    NotLoginException.NOT_TOKEN
+            );
         }
     }
 

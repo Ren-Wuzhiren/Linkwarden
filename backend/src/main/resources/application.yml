@@ -26,3 +26,20 @@ logging:
     com.webcollector: DEBUG
   pattern:
     console: '%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n'
+
+app:
+  auth:
+    registration-enabled: false
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 7200
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  is-read-header: true
+  is-read-body: false
+  is-read-cookie: false
+  token-style: uuid
+  is-log: false

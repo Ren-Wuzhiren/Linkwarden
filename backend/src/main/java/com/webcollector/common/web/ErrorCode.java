@@ -8,6 +8,7 @@ public enum ErrorCode {
         VALIDATION_ERROR       400
         INVALID_REQUEST        400
         UNAUTHORIZED           401
+        AUTH_REQUIRED          401
         FORBIDDEN              403
         NOT_FOUND              404
         CONFLICT               409
@@ -18,6 +19,7 @@ public enum ErrorCode {
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "请求参数不合法"),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "请求格式不正确"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "未认证"),
+    AUTH_REQUIRED(HttpStatus.UNAUTHORIZED, "请先登录"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "无权访问"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "资源不存在"),
     CONFLICT(HttpStatus.CONFLICT, "资源冲突"),

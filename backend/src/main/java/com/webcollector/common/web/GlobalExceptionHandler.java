@@ -1,5 +1,6 @@
 package com.webcollector.common.web;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -32,6 +33,17 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(NotLoginException.class)
+    public ResponseEntity<ErrorResponse> handleNotLoginException(
+            NotLoginException exception
+    ) {
+        return build(
+                ErrorCode.AUTH_REQUIRED,
+                ErrorCode.AUTH_REQUIRED.getDefaultMessage(),
+                Map.of()
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception
@@ -52,7 +64,6 @@ public class GlobalExceptionHandler {
                 details
         );
     }
-
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationException(
