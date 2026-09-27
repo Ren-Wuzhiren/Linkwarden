@@ -4,9 +4,11 @@
 
 ## 当前状态
 
-- 阶段：仓库初始化、Linkwarden 源码研读和自有项目设计文档均已完成。
-- 上游 web/worker 已在本地跑通，首页检查返回 HTTP 200。
-- 自有 Java/Vue 实现尚未开始编码；下一步是阶段 1 的 Spring Boot 骨架、数据库迁移、用户与鉴权。
+- 阶段：阶段 0、1.1、1.2、1.3 已完成；阶段 1.4 已完成 1.4A、1.4B1、1.4B2，1.4B3 待开始。
+- 后端已建立 Maven 骨架、本地 profile、Flyway、统一响应与异常、健康检查、`app_user` 迁移、MyBatis-Plus 映射、BCrypt Bean、Redis 持久化 Sa-Token 会话，以及注册 DTO 和输入规范化。
+- 当前全量测试 55 项通过，其中 Testcontainers 集成测试使用真实 MySQL 8.4 和 Redis 7.4。
+- 四个鉴权 HTTP 接口尚未实现；下一步只实现注册接口 `POST /api/v1/auth/register`，完成后再进入登录、`/me` 和退出。
+- 上游 web/worker 已在本地跑通，首页检查返回 HTTP 200；上游源码仍只用于研究和对照。
 - 参考源码固定在 Linkwarden `v2.16.3`，只用于研究和对照，不直接进入本项目提交。
 
 ## 第一版范围
@@ -23,10 +25,12 @@
 
 ## 计划技术栈
 
-- 后端：Java 17、Spring Boot 3.x、MyBatis-Plus、Sa-Token/JWT、MySQL 8、Redis。
+- 后端：Java 17、Spring Boot 3.x、MyBatis-Plus、Sa-Token + Redis 会话、MySQL 8、Redis。
 - 采集：Playwright Java、Jsoup/Readability4J、独立 worker profile。
 - 前端：Vue 3、Vite、Pinia、Vue Router、Element Plus。
 - 部署：Docker Compose、Nginx。
+
+JWT 不作为第一版必需依赖；如果需要学习 JWT，应在鉴权闭环稳定后作为可替换实现单独评估。
 
 ## Maven 结构
 
@@ -38,8 +42,8 @@
 AGENTS.md                 # 协作与学习规范
 docs/                     # 需求、研读、工程化、复盘和四大件笔记
 reference/linkwarden/     # 上游参考源码，本地克隆且不提交
-backend/                  # 后续由用户亲手实现
-frontend/                 # 后续由 Codex 生成并逐段讲解
+backend/                  # Java 后端，业务代码由用户亲手实现
+frontend/                 # 阶段 6 起由 Codex 生成并逐段讲解
 deploy/                   # Docker、Nginx 和运行配置
 ```
 
