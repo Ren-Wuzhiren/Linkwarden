@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：阶段 0、1.1、1.2、1.3 已完成；阶段 1.4 已完成 `1.4.1`、`1.4.2`、`1.4.3`，下一步为 `1.4.4` 登录、当前用户与退出。
+- 阶段：阶段 0、1.1、1.2、1.3 已完成；阶段 1.4 内部已完成 `1.1`、`1.2`、`1.3`，下一步为 `1.4` 登录、当前用户与退出。
 - 后端已建立 Maven 骨架、本地 profile、Flyway、统一响应与异常、健康检查、`app_user` 迁移、MyBatis-Plus 映射、BCrypt、Redis 持久化 Sa-Token 会话、注册 DTO、输入规范化、`AuthService`、`AuthController` 和注册接口测试。
 - 当前全量测试 70 项通过，其中 Testcontainers 集成测试使用真实 MySQL 8.4 和 Redis 7.4。
 - 注册接口 `POST /api/v1/auth/register` 已完成并返回 `201 Created`；下一步进入登录、`/me` 和退出。
