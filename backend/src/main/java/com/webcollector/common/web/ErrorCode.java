@@ -23,6 +23,9 @@ public enum ErrorCode {
     FORBIDDEN(HttpStatus.FORBIDDEN, "无权访问"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "资源不存在"),
     CONFLICT(HttpStatus.CONFLICT, "资源冲突"),
+    REGISTRATION_DISABLED(HttpStatus.FORBIDDEN, "当前环境未开放注册"),
+    USERNAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "用户名已存在"),
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "邮箱已被使用"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系统内部错误"),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "服务暂时不可用");
 
