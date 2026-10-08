@@ -1,6 +1,7 @@
 package com.webcollector.auth;
 
 import com.jayway.jsonpath.JsonPath;
+import com.webcollector.support.SharedTestContainers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +13,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,34 +24,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         properties = "app.auth.registration-enabled=true"
 )
 @AutoConfigureMockMvc
-@Testcontainers
 public class AuthSessionIntegrationTest {
-    @Container
-    static final MySQLContainer<?> MYSQL =
-            new MySQLContainer<>("mysql:8.4")
-                    .withDatabaseName("webcollector")
-                    .withUsername("webcollector")
-                    .withPassword("webcollector_dev");
-
-    @Container
-    static final GenericContainer<?> REDIS =
-            new GenericContainer<>("redis:7.4-alpine")
-                    .withExposedPorts(6379);
-
     @DynamicPropertySource
     static void registerContainerProperties(
             DynamicPropertyRegistry registry
     ) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add(
-                "spring.data.redis.port",
-                () -> REDIS.getMappedPort(6379)
-        );
-        registry.add("spring.data.redis.password", () -> "");
+        SharedTestContainers.registerProperties(registry);
     }
 
     @Autowired
