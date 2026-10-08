@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- 阶段：阶段 0、1.1、1.2、1.3 已完成；阶段 1.4 内部已完成 `1.1`、`1.2`、`1.3`，下一步为 `1.4` 登录、当前用户与退出。
-- 后端已建立 Maven 骨架、本地 profile、Flyway、统一响应与异常、健康检查、`app_user` 迁移、MyBatis-Plus 映射、BCrypt、Redis 持久化 Sa-Token 会话、注册 DTO、输入规范化、`AuthService`、`AuthController` 和注册接口测试。
-- 当前全量测试 70 项通过，其中 Testcontainers 集成测试使用真实 MySQL 8.4 和 Redis 7.4。
-- 注册接口 `POST /api/v1/auth/register` 已完成并返回 `201 Created`；下一步进入登录、`/me` 和退出。
+- 阶段：X0 工程基线已完成，X1 用户与鉴权已完成，下一步进入 X2 收藏领域模型与 CRUD。
+- 后端已建立 Maven 骨架、本地 profile、Flyway、统一响应与异常、健康检查、`app_user` 迁移、MyBatis-Plus 映射、BCrypt、Redis 持久化 Sa-Token 会话、注册、登录、当前用户和退出。
+- 当前全量测试 86 项通过，其中 Testcontainers 集成测试使用真实 MySQL 8.4 和 Redis 7.4。
+- 注册、登录、`/me` 和退出接口均已完成；真实会话生命周期已验证。
 - 上游 web/worker 已在本地跑通，首页检查返回 HTTP 200；上游源码仍只用于研究和对照。
 - 参考源码固定在 Linkwarden `v2.16.3`，只用于研究和对照，不直接进入本项目提交。
 

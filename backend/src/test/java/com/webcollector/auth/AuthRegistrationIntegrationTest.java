@@ -182,4 +182,6 @@ public class AuthRegistrationIntegrationTest {
                                 """.formatted(username, email)))
                 .andExpect(status().isCreated());
     }
+
+
 }

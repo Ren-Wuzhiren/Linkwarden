@@ -7,6 +7,8 @@ import com.webcollector.common.web.BusinessException;
 import com.webcollector.common.web.ErrorCode;
 import com.webcollector.common.web.GlobalExceptionHandler;
 import com.webcollector.common.web.RequestIdFilter;
+import com.webcollector.auth.dto.LoginRequest;
+import com.webcollector.auth.dto.LoginResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,6 +28,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.times;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 public class AuthControllerTest {
 
@@ -234,5 +238,217 @@ public class AuthControllerTest {
                         .value("请求格式不正确"))
                 .andExpect(jsonPath("$.requestId")
                         .value("req-auth-006"));
+    }
+
+    // [测试意图] 验证登录成功返回 200、Token、过期时间和用户摘要。
+    @Test
+    void shouldReturnLoginResponseWhenCredentialsAreValid() throws Exception {
+        when(authService.login(any(LoginRequest.class)))
+                .thenReturn(new LoginResponse(
+                        "session-token",
+                        "Authorization",
+                        Instant.parse("2026-10-08T14:00:00Z"),
+                        new UserSummary(
+                                1L,
+                                "student",
+                                "student@example.com",
+                                Instant.parse("2026-10-08T12:00:00Z")
+                        )
+                ));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-007"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "username": "  student  ",
+                              "password": "correct-horse"
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token")
+                        .value("session-token"))
+                .andExpect(jsonPath("$.data.tokenName")
+                        .value("Authorization"))
+                .andExpect(jsonPath("$.data.expiresAt")
+                        .value("2026-10-08T14:00:00Z"))
+                .andExpect(jsonPath("$.data.user.id")
+                        .value(1))
+                .andExpect(jsonPath("$.data.user.username")
+                        .value("student"))
+                .andExpect(jsonPath("$.message")
+                        .value("登录成功"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-007"))
+                .andExpect(jsonPath("$.data.user.passwordHash")
+                        .doesNotExist());
+
+        ArgumentCaptor<LoginRequest> captor =
+                ArgumentCaptor.forClass(LoginRequest.class);
+
+        verify(authService).login(captor.capture());
+
+        assertThat(captor.getValue().username())
+                .isEqualTo("student");
+        assertThat(captor.getValue().password())
+                .isEqualTo("correct-horse");
+    }
+
+    // [测试意图] 验证用户名或密码错误返回 401 AUTH_INVALID_CREDENTIALS。
+    @Test
+    void shouldReturnUnauthorizedWhenCredentialsAreInvalid() throws Exception {
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new BusinessException(
+                        ErrorCode.AUTH_INVALID_CREDENTIALS
+                ));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-008"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "username": "student",
+                              "password": "wrong-password"
+                            }
+                            """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("AUTH_INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message")
+                        .value("用户名或密码错误"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-008"));
+    }
+
+    // [测试意图] 验证登录请求字段非法时返回 400 且不会调用 AuthService。
+    @Test
+    void shouldReturnValidationErrorWhenLoginRequestIsInvalid()
+            throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-009"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "username": "",
+                              "password": ""
+                            }
+                            """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.details.username")
+                        .value("用户名不能为空"))
+                .andExpect(jsonPath("$.details.password")
+                        .value("密码不能为空"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-009"));
+
+        verifyNoInteractions(authService);
+    }
+
+    // [测试意图] 验证有效会话可以读取当前用户摘要。
+    @Test
+    void shouldReturnCurrentUserWhenSessionIsValid() throws Exception {
+        when(authService.getCurrentUser())
+                .thenReturn(new UserSummary(
+                        1L,
+                        "student",
+                        "student@example.com",
+                        Instant.parse("2026-10-08T12:00:00Z")
+                ));
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-010"
+                        )
+                        .header(
+                                "Authorization",
+                                "Bearer session-token"
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id")
+                        .value(1))
+                .andExpect(jsonPath("$.data.username")
+                        .value("student"))
+                .andExpect(jsonPath("$.data.email")
+                        .value("student@example.com"))
+                .andExpect(jsonPath("$.data.createdAt")
+                        .value("2026-10-08T12:00:00Z"))
+                .andExpect(jsonPath("$.data.passwordHash")
+                        .doesNotExist())
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-010"));
+
+        verify(authService).getCurrentUser();
+    }
+
+    // [测试意图] 验证缺失或无效 Token 时返回 401 AUTH_REQUIRED。
+    @Test
+    void shouldReturnUnauthorizedWhenCurrentUserIsNotLoggedIn()
+            throws Exception {
+        when(authService.getCurrentUser())
+                .thenThrow(new BusinessException(
+                        ErrorCode.AUTH_REQUIRED
+                ));
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-011"
+                        ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("AUTH_REQUIRED"))
+                .andExpect(jsonPath("$.message")
+                        .value("请先登录"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-011"));
+    }
+
+    // [测试意图] 验证退出成功返回统一响应。
+    @Test
+    void shouldReturnSuccessWhenLogoutSucceeds() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-012"
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("退出成功"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-auth-012"));
+
+        verify(authService).logout();
+    }
+
+    // [测试意图] 验证重复退出保持幂等且两次都返回成功。
+    @Test
+    void shouldAllowRepeatedLogout() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-013"
+                        ))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-auth-014"
+                        ))
+                .andExpect(status().isOk());
+
+        verify(authService, times(2)).logout();
     }
 }
