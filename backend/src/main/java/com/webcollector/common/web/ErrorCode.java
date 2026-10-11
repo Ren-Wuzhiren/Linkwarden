@@ -29,6 +29,8 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "邮箱已被使用"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系统内部错误"),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "用户名或密码错误"),
+    COLLECTION_NAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "集合名称已存在"),
+    COLLECTION_INBOX_PROTECTED(HttpStatus.CONFLICT, "默认 Inbox 不允许删除"),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "服务暂时不可用");
 
     private final HttpStatus status;

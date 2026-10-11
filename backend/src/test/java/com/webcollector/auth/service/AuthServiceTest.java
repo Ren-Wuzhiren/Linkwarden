@@ -6,6 +6,7 @@ import com.webcollector.auth.dto.UserSummary;
 import com.webcollector.auth.entity.AppUser;
 import com.webcollector.auth.mapper.AppUserMapper;
 import com.webcollector.auth.session.SessionTokenService;
+import com.webcollector.collection.service.CollectionService;
 import com.webcollector.common.web.BusinessException;
 import com.webcollector.common.web.ErrorCode;
 import com.webcollector.auth.dto.LoginRequest;
@@ -42,6 +43,7 @@ public class AuthServiceTest {
     private PasswordEncoder passwordEncoder;
     private AuthService authService;
     private SessionTokenService sessionTokenService;
+    private CollectionService collectionService;
 
     @BeforeEach
     void setUp() {
@@ -49,6 +51,7 @@ public class AuthServiceTest {
         authProperties = new AuthProperties();
         passwordEncoder = mock(PasswordEncoder.class);
         sessionTokenService = mock(SessionTokenService.class);
+        collectionService = mock(CollectionService.class);
 
         Clock clock = Clock.fixed(
                 FIXED_INSTANT,
@@ -60,6 +63,7 @@ public class AuthServiceTest {
                 authProperties,
                 passwordEncoder,
                 sessionTokenService,
+                collectionService,
                 clock
         );
     }
@@ -165,6 +169,9 @@ public class AuthServiceTest {
                 .isEqualTo(FIXED_TIME);
 
         verify(passwordEncoder).encode("correct-horse");
+
+        // [测试意图] 验证注册成功后会在同一业务事务中创建默认 Inbox。
+        verify(collectionService).ensureDefaultInbox(1L);
     }
 
     // [测试意图] 验证邮箱为空时不执行邮箱重复查询。
@@ -385,4 +392,5 @@ public class AuthServiceTest {
 
         verify(sessionTokenService).logout();
     }
+
 }

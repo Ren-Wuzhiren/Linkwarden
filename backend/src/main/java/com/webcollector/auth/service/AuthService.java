@@ -12,6 +12,7 @@ import com.webcollector.auth.session.SessionToken;
 import com.webcollector.auth.session.SessionTokenService;
 import com.webcollector.common.web.BusinessException;
 import com.webcollector.common.web.ErrorCode;
+import com.webcollector.collection.service.CollectionService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,18 +32,21 @@ public class AuthService {
     private final AppUserMapper appUserMapper;
     private final Clock clock;
     private final SessionTokenService sessionTokenService;
+    private final CollectionService collectionService;
 
     public AuthService(
             AppUserMapper appUserMapper,
             AuthProperties authProperties,
             PasswordEncoder passwordEncoder,
             SessionTokenService sessionTokenService,
+            CollectionService collectionService,
             Clock clock
     ) {
         this.appUserMapper = appUserMapper;
         this.authProperties = authProperties;
         this.passwordEncoder = passwordEncoder;
         this.sessionTokenService = sessionTokenService;
+        this.collectionService = collectionService;
         this.clock = clock;
     }
 
@@ -96,6 +100,9 @@ public class AuthService {
                     "用户名或邮箱已存在"
             );
         }
+
+        // [业务] 用户和默认 Inbox 必须在同一个数据库事务中提交。
+        collectionService.ensureDefaultInbox(user.getId());
 
         return new UserSummary(
                 user.getId(),

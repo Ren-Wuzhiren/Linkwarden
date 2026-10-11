@@ -91,6 +91,57 @@ public class AuthRegistrationIntegrationTest {
         )).isTrue();
     }
 
+    // [测试意图] 验证注册成功会在同一事务中创建唯一的默认 Inbox。
+    @Test
+    void shouldCreateDefaultInboxWhenRegistrationSucceeds()
+            throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "inbox-student",
+                                  "email": "inbox@example.com",
+                                  "password": "correct-horse"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        AppUser saved = appUserMapper.selectOne(
+                new LambdaQueryWrapper<AppUser>()
+                        .eq(
+                                AppUser::getUsername,
+                                "inbox-student"
+                        )
+        );
+
+        assertThat(saved).isNotNull();
+
+        Integer inboxCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM collection
+                WHERE user_id = ?
+                  AND is_inbox = 1
+                """,
+                Integer.class,
+                saved.getId()
+        );
+
+        String inboxName = jdbcTemplate.queryForObject(
+                """
+                SELECT name
+                FROM collection
+                WHERE user_id = ?
+                  AND is_inbox = 1
+                """,
+                String.class,
+                saved.getId()
+        );
+
+        assertThat(inboxCount).isEqualTo(1);
+        assertThat(inboxName).isEqualTo("Inbox");
+    }
+
     // [测试意图] 验证真实数据库下用户名重复返回 409。
     @Test
     void shouldRejectDuplicateUsername() throws Exception {
