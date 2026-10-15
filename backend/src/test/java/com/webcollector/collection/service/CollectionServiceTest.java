@@ -8,6 +8,7 @@ import com.webcollector.collection.entity.LinkCollection;
 import com.webcollector.collection.mapper.LinkCollectionMapper;
 import com.webcollector.common.web.BusinessException;
 import com.webcollector.common.web.ErrorCode;
+import com.webcollector.link.mapper.LinkMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,12 +35,14 @@ public class CollectionServiceTest {
             LocalDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC);
 
     private LinkCollectionMapper linkCollectionMapper;
+    private LinkMapper linkMapper;
     private SessionTokenService sessionTokenService;
     private CollectionService collectionService;
 
     @BeforeEach
     void setUp() {
         linkCollectionMapper = mock(LinkCollectionMapper.class);
+        linkMapper = mock(LinkMapper.class);
         sessionTokenService = mock(SessionTokenService.class);
 
         Clock clock = Clock.fixed(
@@ -49,6 +52,7 @@ public class CollectionServiceTest {
 
         collectionService = new CollectionService(
                 linkCollectionMapper,
+                linkMapper,
                 sessionTokenService,
                 clock
         );
@@ -282,6 +286,10 @@ public class CollectionServiceTest {
         when(linkCollectionMapper.selectList(any()))
                 .thenReturn(List.of(inbox, reading));
 
+        // [软件工程] 显式声明计数为 0，不依赖 Mockito 对 Long 返回值默认给 null 的行为。
+        when(linkMapper.selectCount(any()))
+                .thenReturn(0L);
+
         List<CollectionSummary> result =
                 collectionService.listCollections();
 
@@ -377,6 +385,93 @@ public class CollectionServiceTest {
 
         verify(linkCollectionMapper, never())
                 .insert(any(LinkCollection.class));
+    }
+
+    // [测试意图] 验证集合里还有链接时拒绝删除，且不执行数据库删除。
+    @Test
+    void shouldRejectDeletingCollectionThatStillHasLinks() {
+        when(sessionTokenService.requireLoginId())
+                .thenReturn(1L);
+
+        when(linkCollectionMapper.selectOne(any()))
+                .thenReturn(collection(
+                        60L,
+                        1L,
+                        "Reading",
+                        false
+                ));
+
+        when(linkMapper.selectCount(any()))
+                .thenReturn(2L);
+
+        assertThatThrownBy(
+                () -> collectionService.deleteCollection(60L)
+        ).isInstanceOfSatisfying(
+                BusinessException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.COLLECTION_NOT_EMPTY)
+        );
+
+        verify(linkCollectionMapper, never())
+                .deleteById(anyLong());
+    }
+
+    // [测试意图] 验证"非空 Inbox"报的是 Inbox 保护规则而不是非空规则——判断顺序不能颠倒。
+    @Test
+    void shouldReportInboxProtectionBeforeLinkCount() {
+        when(sessionTokenService.requireLoginId())
+                .thenReturn(1L);
+
+        when(linkCollectionMapper.selectOne(any()))
+                .thenReturn(collection(
+                        40L,
+                        1L,
+                        "Inbox",
+                        true
+                ));
+
+        when(linkMapper.selectCount(any()))
+                .thenReturn(5L);
+
+        assertThatThrownBy(
+                () -> collectionService.deleteCollection(40L)
+        ).isInstanceOfSatisfying(
+                BusinessException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(
+                                ErrorCode.COLLECTION_INBOX_PROTECTED
+                        )
+        );
+
+        // [软件工程] Inbox 判断在查链接之前就短路了，所以计数查询根本不该发生；
+        // 如果哪天顺序被写反，上面那条错误码断言会先失败。
+        verify(linkMapper, never()).selectCount(any());
+        verify(linkCollectionMapper, never())
+                .deleteById(anyLong());
+    }
+
+    // [测试意图] 验证列表返回的是真实链接计数，而不是写死的 0。
+    @Test
+    void shouldReturnRealLinkCountWhenListing() {
+        when(sessionTokenService.requireLoginId())
+                .thenReturn(1L);
+
+        when(linkCollectionMapper.selectList(any()))
+                .thenReturn(List.of(collection(
+                        11L,
+                        1L,
+                        "Reading",
+                        false
+                )));
+
+        when(linkMapper.selectCount(any()))
+                .thenReturn(3L);
+
+        List<CollectionSummary> result =
+                collectionService.listCollections();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).linkCount()).isEqualTo(3L);
     }
 
     private static LinkCollection collection(

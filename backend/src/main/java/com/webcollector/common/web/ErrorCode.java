@@ -32,6 +32,7 @@ public enum ErrorCode {
     COLLECTION_NAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "集合名称已存在"),
     COLLECTION_INBOX_PROTECTED(HttpStatus.CONFLICT, "默认 Inbox 不允许删除"),
     TAG_NAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "标签名称已存在"),
+    COLLECTION_NOT_EMPTY(HttpStatus.CONFLICT, "集合中还有链接"),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "服务暂时不可用");
 
     private final HttpStatus status;
