@@ -128,23 +128,14 @@ public class TagService {
     }
 
     /**
-     * [业务] 判断某用户下同名标签是否已存在。
+     * [业务] 判断某用户下是否存在同名标签，可排除指定 id（改名时排除自己）。
      *
      * [408] 这里不做小写化，因为比较语义由数据库列的排序规则决定：
      * 表用的是 utf8mb4_0900_ai_ci（ci = case insensitive），
-     * 所以 WHERE name = 'Java' 会命中 'java'。
+     * 所以 WHERE name = 'Java' 会命中 'java'。排除自身后，改大小写就不再被误判为冲突。
      *
-     * [排错] 如果这里自己加一层 toLowerCase()，业务层的判断就与数据库不一致了——
-     * 查重说"没有"，插入却报 409，两边要一致才有意义。
-     */
-    /**
-     * [业务] 判断某用户下是否存在同名标签，可排除指定 id（改名时排除自己）。
-     *
-     * [408] 比较语义由数据库列的排序规则决定：表用 utf8mb4_0900_ai_ci，
-     * 所以 name = 'java' 会命中 'Java'。排除自身后，改大小写就不再被误判为冲突。
-     *
-     * [排错] 不要在 Java 侧加 equalsIgnoreCase 来"补"这个判断——
-     * 那等于用另一套规则重算一遍，两套规则迟早会分叉。
+     * [排错] 不要在 Java 侧加 toLowerCase() 或 equalsIgnoreCase 来"补"这个判断——
+     * 那等于用另一套规则重算一遍，查重说"没有"、插入却报 409，两套规则迟早会分叉。
      */
     private boolean existsByNameExcept(Long userId, String name, Long excludeId) {
         LambdaQueryWrapper<Tag> query = new LambdaQueryWrapper<Tag>()
