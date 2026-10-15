@@ -474,6 +474,38 @@ public class CollectionServiceTest {
         assertThat(result.get(0).linkCount()).isEqualTo(3L);
     }
 
+    // [测试意图] 验证只改大小写不算冲突——查重排除了自身。
+    // 它真正被证明的地方在 LinkCollectionMapperTest：只有真实 MySQL 的 ai_ci 排序规则
+    // 才会让 "reading" 命中原行，Mock 无法复现这一点。
+    @Test
+    void shouldAllowRenameToSameCollectionWithDifferentCase() {
+        when(sessionTokenService.requireLoginId())
+                .thenReturn(1L);
+
+        when(linkCollectionMapper.selectOne(any()))
+                .thenReturn(collection(
+                        30L,
+                        1L,
+                        "Reading",
+                        false
+                ));
+
+        when(linkCollectionMapper.selectCount(any()))
+                .thenReturn(0L);
+
+        when(linkMapper.selectCount(any()))
+                .thenReturn(0L);
+
+        CollectionSummary summary =
+                collectionService.updateCollection(
+                        30L,
+                        new UpdateCollectionRequest("reading", "")
+                );
+
+        assertThat(summary.name()).isEqualTo("reading");
+        verify(linkCollectionMapper).updateById(any(LinkCollection.class));
+    }
+
     private static LinkCollection collection(
             Long id,
             Long userId,

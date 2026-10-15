@@ -1,5 +1,6 @@
 package com.webcollector.collection.mapper;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.webcollector.auth.entity.AppUser;
 import com.webcollector.auth.mapper.AppUserMapper;
 import com.webcollector.collection.entity.LinkCollection;
@@ -127,6 +128,48 @@ class LinkCollectionMapperTest {
         assertThat(secondCollection.getId()).isNotNull();
         assertThat(firstCollection.getId())
                 .isNotEqualTo(secondCollection.getId());
+    }
+
+    // [测试意图] 钉住排序规则：不排除自身时，用小写查询会命中原行。
+    @Test
+    void shouldHitOwnRowWhenQueryingWithDifferentCase() {
+        AppUser owner = newUser("collection-case-owner");
+        LinkCollection collection = newCollection(
+                owner.getId(), "Reading", false, now()
+        );
+        assertThat(linkCollectionMapper.insert(collection)).isEqualTo(1);
+
+        // [排错] 少了这行守卫，"忘了 insert" 会让下面的计数静默返回 0，
+        // 而"排除自身"那条更会靠 id <> NULL 恒为 unknown 假通过。
+        assertThat(collection.getId()).isNotNull();
+
+        Long count = linkCollectionMapper.selectCount(
+                new LambdaQueryWrapper<LinkCollection>()
+                        .eq(LinkCollection::getUserId, owner.getId())
+                        .eq(LinkCollection::getName, "reading")
+        );
+
+        assertThat(count).isEqualTo(1L);
+    }
+
+    // [测试意图] 验证排除自身后查重不再命中自己——改名只改大小写因此能通过。
+    @Test
+    void shouldNotHitOwnRowWhenExcludingOwnId() {
+        AppUser owner = newUser("collection-exclude-owner");
+        LinkCollection collection = newCollection(
+                owner.getId(), "Reading", false, now()
+        );
+        assertThat(linkCollectionMapper.insert(collection)).isEqualTo(1);
+        assertThat(collection.getId()).isNotNull();
+
+        Long count = linkCollectionMapper.selectCount(
+                new LambdaQueryWrapper<LinkCollection>()
+                        .eq(LinkCollection::getUserId, owner.getId())
+                        .eq(LinkCollection::getName, "reading")
+                        .ne(LinkCollection::getId, collection.getId())
+        );
+
+        assertThat(count).isZero();
     }
 
     private AppUser newUser(String username) {

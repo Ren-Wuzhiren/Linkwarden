@@ -101,7 +101,8 @@ public class CollectionService {
     ) {
         Long userId = currentUserId();
 
-        if (existsByName(userId, request.name())) {
+        // [业务] 先查一次是为了给出友好错误；真正的唯一性由数据库索引兜底。
+        if (existsByNameExcept(userId, request.name(), null)) {
             throw new BusinessException(
                     ErrorCode.COLLECTION_NAME_ALREADY_EXISTS
             );
@@ -140,11 +141,7 @@ public class CollectionService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
 
-        // [排错] 这里还留着一个大小写缺陷：String.equals 区分大小写，而列是
-        // utf8mb4_0900_ai_ci，所以"只改大小写"会被误判成重名。修法和
-        // TagService.existsByNameExcept 完全一样，等 M2.3 收尾后单独处理。
-        if (!collection.getName().equals(request.name())
-                && existsByName(userId, request.name())) {
+        if (existsByNameExcept(userId, request.name(), collectionId)) {
             throw new BusinessException(
                     ErrorCode.COLLECTION_NAME_ALREADY_EXISTS
             );
@@ -213,15 +210,33 @@ public class CollectionService {
         );
     }
 
-    private boolean existsByName(
+    /**
+     * [业务] 判断某用户下是否存在同名集合，可排除指定 id（改名时排除自己）。
+     *
+     * [408] 比较语义由数据库列的排序规则决定：表用 utf8mb4_0900_ai_ci，
+     * 所以 name = 'Reading' 会命中 'reading'。排除自身后，只改大小写就不再被误判为冲突。
+     *
+     * [排错] 不要在 Java 侧加 equalsIgnoreCase 来"补"这个判断——那等于用另一套规则
+     * 重算一遍，查重说"没有"、插入却报 409，两套规则迟早会分叉。
+     *
+     * [排错] excludeId 为 null 时不能调用 ne：MyBatis-Plus 会拼出 `id <> NULL`，
+     * 该条件在 SQL 里恒为 unknown，查重会永远返回 0。
+     */
+    private boolean existsByNameExcept(
             Long userId,
-            String name
+            String name,
+            Long excludeId
     ) {
-        Long count = linkCollectionMapper.selectCount(
+        LambdaQueryWrapper<LinkCollection> query =
                 new LambdaQueryWrapper<LinkCollection>()
                         .eq(LinkCollection::getUserId, userId)
-                        .eq(LinkCollection::getName, name)
-        );
+                        .eq(LinkCollection::getName, name);
+
+        if (excludeId != null) {
+            query.ne(LinkCollection::getId, excludeId);
+        }
+
+        Long count = linkCollectionMapper.selectCount(query);
 
         return count != null && count > 0;
     }
