@@ -3,6 +3,7 @@ package com.webcollector.link.controller;
 import com.webcollector.common.web.ApiResponse;
 import com.webcollector.link.dto.CreateLinkRequest;
 import com.webcollector.link.dto.LinkSummary;
+import com.webcollector.link.dto.SetLinkTagsRequest;
 import com.webcollector.link.dto.UpdateLinkRequest;
 import com.webcollector.link.service.LinkService;
 import jakarta.validation.Valid;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -67,6 +69,25 @@ public class LinkController {
                 linkService.updateLink(id, request),
                 "链接更新成功"
         );
+    }
+
+    /**
+     * [业务] 用请求里的标签集合整体替换这条链接的标签。
+     *
+     * [软件工程] 用 PUT 而不是 POST：语义是"把标签集合替换成这一组"，
+     * 而不是"再追加一个标签"——POST 会让"传两次同一个标签"的行为变得含糊。
+     * 空数组合法，表示清空全部标签。
+     *
+     * 响应 data 为 null，与 DELETE /links/{id} 保持同一形态：这类操作的
+     * 结果状态由后续 GET 读取，不需要在响应里重复回传整个链接。
+     */
+    @PutMapping("/{id}/tags")
+    public ApiResponse<Void> setLinkTags(
+            @PathVariable Long id,
+            @Valid @RequestBody SetLinkTagsRequest request
+    ) {
+        linkService.setLinkTags(id, request);
+        return ApiResponse.success(null, "标签已更新");
     }
 
     @DeleteMapping("/{id}")

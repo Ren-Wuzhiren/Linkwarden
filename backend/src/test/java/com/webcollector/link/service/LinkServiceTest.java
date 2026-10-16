@@ -1,14 +1,19 @@
 package com.webcollector.link.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.webcollector.auth.session.SessionTokenService;
 import com.webcollector.collection.mapper.LinkCollectionMapper;
 import com.webcollector.common.web.BusinessException;
 import com.webcollector.common.web.ErrorCode;
 import com.webcollector.link.dto.CreateLinkRequest;
 import com.webcollector.link.dto.LinkSummary;
+import com.webcollector.link.dto.SetLinkTagsRequest;
 import com.webcollector.link.dto.UpdateLinkRequest;
 import com.webcollector.link.entity.Link;
 import com.webcollector.link.mapper.LinkMapper;
+import com.webcollector.tag.entity.LinkTag;
+import com.webcollector.tag.mapper.LinkTagMapper;
+import com.webcollector.tag.mapper.TagMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +49,8 @@ public class LinkServiceTest {
 
     private LinkMapper linkMapper;
     private LinkCollectionMapper linkCollectionMapper;
+    private TagMapper tagMapper;
+    private LinkTagMapper linkTagMapper;
     private SessionTokenService sessionTokenService;
     private LinkService linkService;
 
@@ -51,12 +59,16 @@ public class LinkServiceTest {
         linkMapper = mock(LinkMapper.class);
         linkCollectionMapper = mock(LinkCollectionMapper.class);
         sessionTokenService = mock(SessionTokenService.class);
+        tagMapper = mock(TagMapper.class);
+        linkTagMapper = mock(LinkTagMapper.class);
 
         Clock clock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 
         linkService = new LinkService(
                 linkMapper,
                 linkCollectionMapper,
+                tagMapper,
+                linkTagMapper,
                 sessionTokenService,
                 clock
         );
@@ -96,6 +108,7 @@ public class LinkServiceTest {
                 new CreateLinkRequest(
                         "https://example.com/a",
                         5L,
+                        List.of(),
                         "示例标题",
                         "示例描述"
                 )
@@ -132,6 +145,7 @@ public class LinkServiceTest {
         linkService.createLink(new CreateLinkRequest(
                 "  https://example.com/a  ",
                 5L,
+                List.of(),
                 null,
                 null
         ));
@@ -152,7 +166,7 @@ public class LinkServiceTest {
         when(linkCollectionMapper.selectCount(any())).thenReturn(0L);
 
         assertThatThrownBy(() -> linkService.createLink(
-                new CreateLinkRequest("https://example.com/a", 99L, "", "")
+                new CreateLinkRequest("https://example.com/a", 99L, List.of(), "", "")
         ))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -161,6 +175,33 @@ public class LinkServiceTest {
                 );
 
         verify(linkMapper, never()).insert(any(Link.class));
+    }
+
+    // [测试意图] 验证保存链接时带上别人的标签返回 404，且一步写入都没有发生。
+    // 这条守的是 createLink 里的 assertOwnedTags——它和 setLinkTags 是两处调用，
+    // 只测其中一处会漏掉另一处被删掉的情况。
+    @Test
+    void shouldRejectCreateWhenTagNotOwned() {
+        when(linkCollectionMapper.selectCount(any())).thenReturn(1L);
+        // [业务] 请求了 1 个标签，但查到的归属数量是 0 → 数量对不上 → 404。
+        when(tagMapper.selectCount(any())).thenReturn(0L);
+
+        assertThatThrownBy(() -> linkService.createLink(new CreateLinkRequest(
+                "https://example.com/a",
+                5L,
+                List.of(99L),
+                "",
+                ""
+        )))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.NOT_FOUND)
+                );
+
+        // [业务] 校验必须发生在插入之前：链接和关联都不该被写入。
+        verify(linkMapper, never()).insert(any(Link.class));
+        verify(linkTagMapper, never()).insert(any(LinkTag.class));
     }
 
     // [测试意图] 验证读取自己的链接返回摘要，字段和时间都正确映射。
@@ -290,6 +331,156 @@ public class LinkServiceTest {
         verify(linkMapper, never()).deleteById(any(Long.class));
     }
 
+    // [测试意图] 验证创建链接时带标签会逐条写入 link_tag，且 tagId 与 createdAt 正确。
+    @Test
+    void shouldAttachTagsWhenCreatingLink() {
+        when(linkCollectionMapper.selectCount(any())).thenReturn(1L);
+        when(tagMapper.selectCount(any())).thenReturn(2L);
+        when(linkMapper.insert(any(Link.class))).thenAnswer(invocation -> {
+            Link inserted = invocation.getArgument(0);
+            inserted.setId(20L);
+            return 1;
+        });
+
+        linkService.createLink(new CreateLinkRequest(
+                "https://example.com/a",
+                5L,
+                List.of(3L, 7L),
+                "",
+                ""
+        ));
+
+        ArgumentCaptor<LinkTag> captor =
+                ArgumentCaptor.forClass(LinkTag.class);
+        verify(linkTagMapper, times(2))
+                .insert(captor.capture());
+
+        List<LinkTag> inserts = captor.getAllValues();
+        assertThat(inserts).hasSize(2);
+        assertThat(inserts.get(0).getLinkId()).isEqualTo(20L);
+        assertThat(inserts.get(0).getTagId()).isEqualTo(3L);
+        assertThat(inserts.get(0).getCreatedAt()).isEqualTo(FIXED_TIME);
+        assertThat(inserts.get(1).getLinkId()).isEqualTo(20L);
+        assertThat(inserts.get(1).getTagId()).isEqualTo(7L);
+    }
+
+    // [测试意图] 验证 setLinkTags 先清空再写入，整体替换标签集合。
+    @Test
+    void shouldReplaceTagsWhenSettingLinkTags() {
+        when(linkMapper.selectOne(any())).thenReturn(
+                existingLink(10L, 5L, "https://example.com/a")
+        );
+        when(tagMapper.selectCount(any())).thenReturn(2L);
+
+        linkService.setLinkTags(
+                10L,
+                new SetLinkTagsRequest(
+                        List.of(3L, 7L)
+                )
+        );
+
+        // [业务] 先清空：必须对 link_id=10 执行一次条件删除。
+        verify(linkTagMapper).delete(
+                any(Wrapper.class)
+        );
+
+        // [业务] 再写入：逐条 insert 两条关联。
+        ArgumentCaptor<LinkTag> captor =
+                ArgumentCaptor.forClass(LinkTag.class);
+        verify(linkTagMapper, times(2))
+                .insert(captor.capture());
+
+        List<LinkTag> inserts = captor.getAllValues();
+        assertThat(inserts.get(0).getLinkId()).isEqualTo(10L);
+        assertThat(inserts.get(0).getTagId()).isEqualTo(3L);
+        assertThat(inserts.get(1).getLinkId()).isEqualTo(10L);
+        assertThat(inserts.get(1).getTagId()).isEqualTo(7L);
+    }
+
+    // [测试意图] 验证对不属于自己的链接设置标签返回 404，不执行任何写入。
+    @Test
+    void shouldRejectSetLinkTagsWhenLinkNotOwned() {
+        when(linkMapper.selectOne(any())).thenReturn(null);
+
+        assertThatThrownBy(() -> linkService.setLinkTags(
+                99L,
+                new SetLinkTagsRequest(List.of(1L))
+        ))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.NOT_FOUND)
+                );
+
+        verify(linkTagMapper, never()).delete(any());
+        verify(linkTagMapper, never()).insert(any(LinkTag.class));
+    }
+
+    // [测试意图] 验证把不属于自己的标签挂到链接上返回 404，不执行写入。
+    @Test
+    void shouldRejectSetLinkTagsWhenTagNotOwned() {
+        when(linkMapper.selectOne(any())).thenReturn(
+                existingLink(10L, 5L, "https://example.com/a")
+        );
+        // [业务] 请求了 2 个标签但只查到 1 个属于当前用户 → 数量对不上 → 404。
+        when(tagMapper.selectCount(any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> linkService.setLinkTags(
+                10L,
+                new SetLinkTagsRequest(
+                        List.of(3L, 99L)
+                )
+        ))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.NOT_FOUND)
+                );
+
+        verify(linkTagMapper, never()).delete(any());
+        verify(linkTagMapper, never()).insert(any(LinkTag.class));
+    }
+
+    // [测试意图] 验证空数组清空全部标签：执行删除但不 insert 任何关联。
+    @Test
+    void shouldClearTagsWhenSettingEmptyArray() {
+        when(linkMapper.selectOne(any())).thenReturn(
+                existingLink(10L, 5L, "https://example.com/a")
+        );
+
+        linkService.setLinkTags(
+                10L,
+                new SetLinkTagsRequest(List.of())
+        );
+
+        // [业务] 清空操作仍然会执行 delete，把该链接的旧关联全部移除。
+        verify(linkTagMapper).delete(
+                any(Wrapper.class)
+        );
+        // [业务] 空数组意味着不写入任何新关联。
+        verify(linkTagMapper, never()).insert(any(LinkTag.class));
+    }
+
+    // [测试意图] 验证重复标签 id 被去重：[1, 1] 只写入一条关联。
+    @Test
+    void shouldDeduplicateTagIds() {
+        when(linkMapper.selectOne(any())).thenReturn(
+                existingLink(10L, 5L, "https://example.com/a")
+        );
+        // [业务] 去重后只有 1 个标签，所以 selectCount 返回 1。
+        when(tagMapper.selectCount(any())).thenReturn(1L);
+
+        linkService.setLinkTags(
+                10L,
+                new SetLinkTagsRequest(
+                        List.of(3L, 3L)
+                )
+        );
+
+        // [业务] 去重后只 insert 一次，而不是两次。
+        verify(linkTagMapper, times(1))
+                .insert(any(LinkTag.class));
+    }
     private static Link existingLink(
             Long id,
             Long collectionId,

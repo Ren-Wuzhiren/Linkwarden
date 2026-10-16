@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 /**
  * [业务] 保存新链接的请求体。
  *
@@ -19,6 +21,11 @@ public record CreateLinkRequest (
 
         @NotNull(message = "必须指定所属集合")
         Long collectionId,
+
+        // [业务] 标签可选：不传就是"先把链接存下来，之后再打标签"。
+        // 字段顺序与 06-接口设计 里的请求示例一致，两个归属类输入挨在一起。
+        // [业务] 允许为空，但一旦提供，每个 id 都必须是自己的标签——校验在 LinkService。
+        List<@NotNull(message = "标签 id 不能为 null") Long> tagIds,
 
         // [软件工程] 校验上限必须和 DDL 对齐：title 是 VARCHAR(500)，description 是 VARCHAR(2000)。
         // 对不上时，要么放过数据库装不下的值（插入报 500），要么把存得下的值挡在门外。
@@ -37,5 +44,8 @@ public record CreateLinkRequest (
         // [Java] 非空列在 Java 侧用空串表达"未填写"，与 DDL 的 DEFAULT '' 对齐。
         title = title == null ? "" : title.strip();
         description = description == null ? "" : description.strip();
+
+        // [Java] 缺省用空列表表达"没带标签"，LinkService 里因此不必再判 null。
+        tagIds = tagIds == null ? List.of() : tagIds;
     }
 }

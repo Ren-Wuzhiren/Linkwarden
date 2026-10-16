@@ -13,8 +13,8 @@ import java.time.Instant;
 public record TagSummary(
         Long id,
         String name,
-        // [业务] linkCount 需要 link_tag 表才能算出真实值，而它在 M2.4 才落地；
-        // 这里先固定 0，与 CollectionSummary.linkCount 的处理方式保持一致。
+        // [业务] linkCount 由 TagService.countLinks 从 link_tag 表实时统计；
+        // listTags 存在已知的 N+1，详见 TagService.listTags 注释。
         long linkCount,
 
         // [排错] Instant 在 standalone MockMvc 下会被序列化成数字时间戳，

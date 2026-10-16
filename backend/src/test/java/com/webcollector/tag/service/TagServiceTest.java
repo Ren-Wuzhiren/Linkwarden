@@ -8,6 +8,7 @@ import com.webcollector.tag.dto.TagSummary;
 import com.webcollector.tag.dto.UpdateTagRequest;
 import com.webcollector.tag.entity.Tag;
 import com.webcollector.tag.mapper.TagMapper;
+import com.webcollector.tag.mapper.LinkTagMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,18 +36,21 @@ public class TagServiceTest {
             LocalDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC);
 
     private TagMapper tagMapper;
+    private LinkTagMapper linkTagMapper;
     private SessionTokenService sessionTokenService;
     private TagService tagService;
 
     @BeforeEach
     void setUp() {
         tagMapper = mock(TagMapper.class);
+        linkTagMapper = mock(LinkTagMapper.class);
         sessionTokenService = mock(SessionTokenService.class);
 
         Clock clock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 
         tagService = new TagService(
                 tagMapper,
+                linkTagMapper,
                 sessionTokenService,
                 clock
         );
@@ -54,7 +58,7 @@ public class TagServiceTest {
         when(sessionTokenService.requireLoginId()).thenReturn(1L);
     }
 
-    // [测试意图] 验证列表返回当前用户的标签，linkCount 暂为 0，创建时间转成 Instant。
+    // [测试意图] 验证列表返回当前用户的标签，创建时间转成 Instant。
     @Test
     void shouldListTagsOfCurrentUser() {
         when(tagMapper.selectList(any()))
@@ -65,8 +69,25 @@ public class TagServiceTest {
         assertThat(tags).hasSize(1);
         assertThat(tags.get(0).id()).isEqualTo(10L);
         assertThat(tags.get(0).name()).isEqualTo("Java");
-        assertThat(tags.get(0).linkCount()).isZero();
         assertThat(tags.get(0).createdAt()).isEqualTo(FIXED_INSTANT);
+    }
+
+    // [测试意图] 验证 listTags 从 link_tag 表查出真实的 linkCount，而不是固定 0。
+    @Test
+    void shouldListTagsWithRealLinkCount() {
+        when(tagMapper.selectList(any()))
+                .thenReturn(List.of(
+                        existingTag(10L, "Java"),
+                        existingTag(11L, "Go")
+                ));
+        when(linkTagMapper.selectCount(any()))
+                .thenReturn(3L)
+                .thenReturn(0L);
+
+        List<TagSummary> tags = tagService.listTags();
+
+        assertThat(tags.get(0).linkCount()).isEqualTo(3L);
+        assertThat(tags.get(1).linkCount()).isZero();
     }
 
     // [测试意图] 验证创建时写入当前用户 ID 与固定时间，并把回写的主键带进摘要。
@@ -94,6 +115,25 @@ public class TagServiceTest {
         assertThat(inserted.getUserId()).isEqualTo(1L);
         assertThat(inserted.getCreatedAt()).isEqualTo(FIXED_TIME);
         assertThat(inserted.getUpdatedAt()).isEqualTo(FIXED_TIME);
+    }
+
+    // [测试意图] 验证刚创建的标签 linkCount 为 0，不需要额外查 link_tag。
+    @Test
+    void shouldReturnZeroLinkCountWhenCreating() {
+        when(tagMapper.selectCount(any())).thenReturn(0L);
+        when(tagMapper.insert(any(Tag.class))).thenAnswer(invocation -> {
+            Tag inserted = invocation.getArgument(0);
+            inserted.setId(20L);
+            return 1;
+        });
+
+        TagSummary summary = tagService.createTag(
+                new CreateTagRequest("Java")
+        );
+
+        assertThat(summary.linkCount()).isZero();
+        // [业务] 刚建出来的标签必然没有链接关联，不应该查 link_tag。
+        verify(linkTagMapper, never()).selectCount(any());
     }
 
     // [测试意图] 验证查重命中时直接抛 409，且不执行插入。
@@ -150,6 +190,21 @@ public class TagServiceTest {
         assertThat(updated.getId()).isEqualTo(10L);
         assertThat(updated.getName()).isEqualTo("JavaEE");
         assertThat(updated.getUpdatedAt()).isEqualTo(FIXED_TIME);
+    }
+
+    // [测试意图] 验证改名后返回的 linkCount 来自 link_tag 表的真实计数。
+    @Test
+    void shouldReturnRealLinkCountWhenUpdating() {
+        when(tagMapper.selectOne(any())).thenReturn(existingTag(10L, "Java"));
+        when(tagMapper.selectCount(any())).thenReturn(0L);
+        when(linkTagMapper.selectCount(any())).thenReturn(5L);
+
+        TagSummary summary = tagService.updateTag(
+                10L,
+                new UpdateTagRequest("JavaEE")
+        );
+
+        assertThat(summary.linkCount()).isEqualTo(5L);
     }
 
     // [测试意图] 验证改别人的标签返回 404，且不执行更新（不泄露 id 是否存在）。

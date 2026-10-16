@@ -6,6 +6,7 @@ import com.webcollector.common.web.GlobalExceptionHandler;
 import com.webcollector.common.web.RequestIdFilter;
 import com.webcollector.link.dto.CreateLinkRequest;
 import com.webcollector.link.dto.LinkSummary;
+import com.webcollector.link.dto.SetLinkTagsRequest;
 import com.webcollector.link.dto.UpdateLinkRequest;
 import com.webcollector.link.service.LinkService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -29,6 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -282,6 +285,92 @@ public class LinkControllerTest {
                 .andExpect(jsonPath("$.message").value("请先登录"))
                 .andExpect(jsonPath("$.requestId")
                         .value("req-link-006"));
+    }
+
+    // [测试意图] 验证 PUT 设置标签返回 200 和"标签已更新"消息。
+    @Test
+    void shouldSetLinkTagsWhenRequestIsValid() throws Exception {
+        mockMvc.perform(put("/api/v1/links/9/tags")
+                        .header(
+                                RequestIdFilter.REQUEST_ID_HEADER,
+                                "req-link-007"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tagIds": [1, 2]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("标签已更新"))
+                .andExpect(jsonPath("$.requestId")
+                        .value("req-link-007"));
+
+        ArgumentCaptor<SetLinkTagsRequest> captor =
+                ArgumentCaptor.forClass(
+                        SetLinkTagsRequest.class
+                );
+
+        verify(linkService).setLinkTags(eq(9L), captor.capture());
+
+        assertThat(captor.getValue().tagIds())
+                .containsExactly(1L, 2L);
+    }
+
+    // [测试意图] 验证给不存在的链接设置标签返回 404 NOT_FOUND。
+    @Test
+    void shouldReturnNotFoundWhenSettingTagsForUnknownLink() throws Exception {
+        doThrow(
+                new BusinessException(ErrorCode.NOT_FOUND)
+        ).when(linkService).setLinkTags(
+                eq(99L),
+                any(SetLinkTagsRequest.class)
+        );
+
+        mockMvc.perform(put("/api/v1/links/99/tags")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tagIds": [1]
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    // [测试意图] 验证 tagIds 为 null 时判 400，不把 null 带进 Service。
+    @Test
+    void shouldReturnBadRequestWhenTagIdsIsNull() throws Exception {
+        mockMvc.perform(put("/api/v1/links/9/tags")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tagIds": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verifyNoInteractions(linkService);
+    }
+
+    // [测试意图] 验证 tagIds 里出现 null 元素时判 400——容器元素约束真的生效。
+    // [排错] 这条不是"多测一条"：如果 List<@NotNull Long> 没被校验，null 会一路
+    // 走到 link_tag 的 NOT NULL 列，把 400 变成 500。它是这条 DTO 契约唯一的证明。
+    @Test
+    void shouldReturnBadRequestWhenTagIdsContainsNull() throws Exception {
+        mockMvc.perform(put("/api/v1/links/9/tags")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tagIds": [1, null]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verifyNoInteractions(linkService);
     }
 
     private static LinkSummary summary(Long id, String url) {
